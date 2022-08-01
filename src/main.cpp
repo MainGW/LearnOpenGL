@@ -1,18 +1,20 @@
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/trigonometric.hpp"
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
-#include <shader.h>
 #include <iostream>
 #include <stdexcept>
+#include <random>
+
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+
+#include <shader.h>
+#include <camera.h>
 
 using namespace std;
 
@@ -65,6 +67,49 @@ float vert[] = {
 void size_callback(GLFWwindow *window, int width, int height) {
     glViewport(0, 0, width, height);
 }
+
+Camera c(glm::vec3(0.0f, 0.0f, 3.0f));
+
+void processKeyboardInput(GLFWwindow *window) {
+    float speed = 0.1f;
+    if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        c.translation(c.getCameraFront() * speed);
+    if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        c.translation(c.getCameraFront() * -speed);
+    if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        c.translation(c.getCameraRight() * -speed);
+    if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        c.translation(c.getCameraRight() * speed);
+}
+
+float lastx = 400.0f, lasty = 300.0f;
+bool firstMouse = true;
+float yaw = -90.0f, pitch = 0.0f;
+void processMouseInput(GLFWwindow *window, double xpos, double ypos) {
+    if(firstMouse) {
+        lastx = xpos;
+        lasty = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos-lastx, yoffset=ypos-lasty;
+    lastx = xpos, lasty = ypos;
+    xoffset *= 0.1f;
+    yoffset *= -0.1f;
+
+    cout << yaw << " " << pitch << endl;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    if(pitch > 89.0f)
+        pitch =  89.0f;
+    if(pitch < -89.0f)
+        pitch = -89.0f;
+
+    c.rotateByEulerAngle(glm::vec3(yaw, 0.0f, pitch));
+}
+
 int main()
 {
 	glfwInit();
@@ -82,6 +127,8 @@ int main()
 	}
 
     glfwMakeContextCurrent(window);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, processMouseInput);
     glfwSetFramebufferSizeCallback(window, size_callback);
     glfwShowWindow(window);
 
@@ -145,6 +192,13 @@ int main()
     program.Use();
     program.setUniform("texture1", 0);
 
+    default_random_engine e;
+    uniform_real_distribution<float> u(-5, 5);
+    e.seed(time(nullptr));
+    auto *cubePos = new glm::vec3[10];
+    cubePos[0] = glm::vec3(0, 0, 0);
+    for(int i = 1;i < 10;i++) cubePos[i] = glm::vec3(u(e), u(e), u(e));
+
     while(!glfwWindowShouldClose(window)) {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -152,9 +206,10 @@ int main()
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture);
 
+        processKeyboardInput(window);
+
         glm::mat4 model = glm::mat4(1.0f), view = glm::mat4(1.0f), projection = glm::mat4(1.0f);
-        model = glm::rotate(model, (float)glfwGetTime() * glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        view  = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
+        view  = c.getViewMatrix();
         projection = glm::perspective(glm::radians(45.0f), (float)WIDTH/HEIGHT, 0.1f, 100.0f);
 
         program.Use();
@@ -163,7 +218,15 @@ int main()
         program.setUniform("projection", projection);
     
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        for(int i = 0; i < 10;i++) {
+            model = glm::mat4(1.0);
+            model = glm::translate(model, cubePos[i]);
+            model = glm::rotate(model, glm::radians(20.0f * i), glm::vec3(1.0f, 0.3f, 0.5f));
+            program.setUniform("model", model);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+        //cout << glm::to_string(c.getCameraPos())  << " " << glm::to_string(c.getCameraFront()) << endl;
+
 
         glfwSwapBuffers(window);
 		glfwPollEvents();
