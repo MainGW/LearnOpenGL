@@ -7,10 +7,6 @@ void Camera::updateVectors() {
     this->up    = glm::normalize(glm::cross(this->right, this->front));
 }
 
-glm::mat4 Camera::getViewMatrix() const {
-    return glm::lookAt(pos, pos + front, up);
-}
-
 void Camera::translation(glm::vec3 direction) {
     pos += direction;
     updateVectors();
@@ -22,10 +18,19 @@ void Camera::rotateByQuaternions(glm::qua<float> angle) {
 }
 
 void Camera::rotateByEulerAngle(glm::vec3 angle) {
-    this->front.x = cos(glm::radians(angle.z)) * cos(glm::radians(angle.x));
-    this->front.y = sin(glm::radians(angle.z));
-    this->front.z = cos(glm::radians(angle.z)) * sin(glm::radians(angle.x));
-    updateVectors();
+    glm::qua<float> Rx = glm::qua<float>(glm::cos(angle.z),
+                                         this->getCameraRight().x*glm::sin(angle.x),
+                                         this->getCameraRight().y*glm::sin(angle.x),
+                                         this->getCameraRight().z*glm::sin(angle.x)),
+                Ry = glm::qua<float>(glm::cos(angle.z),
+                                     this->getCameraUp().x*glm::sin(angle.y),
+                                    this->getCameraUp().y*glm::sin(angle.y),
+                                    this->getCameraUp().z*glm::sin(angle.y)),
+                Rz = glm::qua<float>(glm::cos(angle.z),
+                                     this->getCameraFront().x*glm::sin(angle.z),
+                                    this->getCameraFront().y*glm::sin(angle.z),
+                                    this->getCameraFront().z*glm::sin(angle.z));
+    this->rotateByQuaternions(Rx*Rz*Ry);
 }
 
 

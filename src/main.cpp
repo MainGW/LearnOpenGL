@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdexcept>
+#include <memory>
 #include <random>
 
 #include <glad/glad.h>
@@ -8,19 +9,16 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
-
-#include <shader.h>
-#include <camera.h>
+#include "shader.h"
+#include "camera.h"
+#include "texture.h"
 
 using namespace std;
 
 const int WIDTH=800, HEIGHT=600;
 
-float vert[] = {
+static const float vert[] = {
     -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
      0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
      0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
@@ -84,7 +82,6 @@ void processKeyboardInput(GLFWwindow *window) {
 
 float lastx = 400.0f, lasty = 300.0f;
 bool firstMouse = true;
-float yaw = -90.0f, pitch = 0.0f;
 void processMouseInput(GLFWwindow *window, double xpos, double ypos) {
     if(firstMouse) {
         lastx = xpos;
@@ -94,20 +91,10 @@ void processMouseInput(GLFWwindow *window, double xpos, double ypos) {
 
     float xoffset = xpos-lastx, yoffset=ypos-lasty;
     lastx = xpos, lasty = ypos;
-    xoffset *= 0.1f;
+    xoffset *= -0.1f;
     yoffset *= -0.1f;
 
-    cout << yaw << " " << pitch << endl;
-
-    yaw += xoffset;
-    pitch += yoffset;
-
-    if(pitch > 89.0f)
-        pitch =  89.0f;
-    if(pitch < -89.0f)
-        pitch = -89.0f;
-
-    c.rotateByEulerAngle(glm::vec3(yaw, 0.0f, pitch));
+    c.rotateByEulerAngle(glm::vec3(glm::radians(yoffset), glm::radians(xoffset), 0));
 }
 
 int main()
@@ -133,22 +120,27 @@ int main()
     glfwShowWindow(window);
 
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        cerr << "Failed to initalize GLAD."  << endl;
+        cerr << "Failed to initialize GLAD."  << endl;
         return -1;
     }
 
     Shader vShader(GL_VERTEX_SHADER), fShader(GL_FRAGMENT_SHADER);
     ShaderProgram program;
-    try {
 
+    try {
         vShader.LoadAndCompile("rsrc/vert.glsl");
         fShader.LoadAndCompile("rsrc/frag.glsl");
 
         program.AttachShader(vShader);
         program.AttachShader(fShader);
         program.Link();
-    } catch (std::runtime_error &e) {
-        cerr << e.what() << endl;
+
+    } catch (ShaderException &e) {
+        cerr << "Error: Shader: " << e.what() << endl;
+        glfwTerminate();
+        return -1;
+    } catch (ShaderProgramException &e) {
+        cerr << "Error: ShaderProgram: " << e.what() << endl;
         glfwTerminate();
         return -1;
     }
@@ -166,35 +158,17 @@ int main()
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5*sizeof(float), (void*)(3*sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    int w, h, n;
-    stbi_set_flip_vertically_on_load(true);
-    unsigned char *data = stbi_load("rsrc/a.png", &w, &h, &n, 0);
-
-    if(!data) {
-        cerr << "Error: Image: Failed to read texture image." << endl;
-        return -1;
-    }
-
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    stbi_image_free(data);
+    auto *t = new Texture2D(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_NEAREST_MIPMAP_LINEAR, GL_NEAREST);
+    t->Load("rsrc/a.jpg");
+    t->Bind();
 
     glEnable(GL_DEPTH_TEST);
 
     program.Use();
     program.setUniform("texture1", 0);
 
-    default_random_engine e;
+    default_random_engine e(time(nullptr));
     uniform_real_distribution<float> u(-5, 5);
-    e.seed(time(nullptr));
     auto *cubePos = new glm::vec3[10];
     cubePos[0] = glm::vec3(0, 0, 0);
     for(int i = 1;i < 10;i++) cubePos[i] = glm::vec3(u(e), u(e), u(e));
@@ -204,7 +178,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
+        t->Bind();
 
         processKeyboardInput(window);
 
@@ -225,13 +199,12 @@ int main()
             program.setUniform("model", model);
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
-        //cout << glm::to_string(c.getCameraPos())  << " " << glm::to_string(c.getCameraFront()) << endl;
-
 
         glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
 
+    delete t;
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
 	glfwDestroyWindow(window);

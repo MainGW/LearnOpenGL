@@ -6,6 +6,35 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <string> 
 
+class ShaderException : public std::exception {
+public:
+    ShaderException(const char *error) {
+        pError = std::string(strdup(error));
+    }
+
+    ~ShaderException() = default;
+
+    virtual const char *what() const noexcept {
+        return pError.c_str();
+    }
+private:
+    std::string pError;
+};
+
+
+class ShaderProgramException : public std::exception {
+public:
+    ShaderProgramException(const char *error) {
+        pError = std::string(strdup(error));
+    }
+    ~ShaderProgramException() = default;
+    virtual const char *what() const noexcept {
+        return pError.c_str();
+    }
+private:
+    std::string pError;
+};
+
 /**
  * @brief OpenGL Shader Class
  * @author wanaoi
@@ -70,7 +99,7 @@ public:
     /**
      * @brief Attach a shader object;
      */
-    void AttachShader(const Shader &obj);
+    void AttachShader(const Shader &obj) const;
 
     /**
      * @brief Link the shader program.

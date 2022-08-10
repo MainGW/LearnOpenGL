@@ -22,21 +22,19 @@ void Shader::LoadAndCompile(const std::string &fname) const{
         std::stringstream codestream;
         codestream << fin.rdbuf();
         code = codestream.str();
-    }catch(std::ifstream::failure e) {
-        throw std::runtime_error("Error: Shader: File read failed");
+    }catch(std::ifstream::failure &e) {
+        throw ShaderException(e.what());
     }
     const char *shaderCode = code.c_str();
-    glShaderSource(this->shaderObject, 1, &shaderCode, NULL);
+    glShaderSource(this->shaderObject, 1, &shaderCode, nullptr);
     glCompileShader(this->shaderObject);
     
     int success;
     glGetShaderiv(this->shaderObject, GL_COMPILE_STATUS, &success);
     if(!success) {
-        char infolog[512];
-        glGetShaderInfoLog(this->shaderObject, 512, NULL, infolog);
-        std::ostringstream msg;
-        msg << "Error: Shader: Failed to compile shader." << std::endl << "Reason: " << infolog << std::endl;
-        throw std::runtime_error(msg.str());
+        char infoLog[512];
+        glGetShaderInfoLog(this->shaderObject, 512, nullptr, infoLog);
+        throw ShaderProgramException(infoLog);
     }
 }
 
@@ -52,7 +50,7 @@ ShaderProgram::~ShaderProgram() {
     glDeleteProgram(this->progHandle);
 }
 
-void ShaderProgram::AttachShader(const Shader &obj) {
+void ShaderProgram::AttachShader(const Shader &obj) const {
     glAttachShader(this->progHandle, obj.getShaderObject());
 }
 
@@ -64,8 +62,7 @@ void ShaderProgram::Link() const{
         std::stringstream msg;
         char infoLog[512];
         glGetProgramInfoLog(this->progHandle, 512, nullptr, infoLog);
-        msg << "Error: Program: Failed to link shader program." << std::endl << "Reason: " << infoLog << std::endl;
-        throw std::runtime_error(msg.str());
+        throw ShaderProgramException(infoLog);
     }
 }
 

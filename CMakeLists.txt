@@ -4,7 +4,7 @@ project(OpenGL_Test)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "-Og -Wall -g -ggdb")
 
-set(SOURCES_FILE src/glad.c src/main.cpp src/shader.cpp src/camera.cpp)
+aux_source_directory(src SOURCES_FILE)
 
 find_package(OpenGL REQUIRED)
 find_package(PkgConfig REQUIRED)
